@@ -21,6 +21,7 @@ SOFTWARE.
 */
 #ifndef SMALLUNIT_H
 #define SMALLUNIT_H
+#include <stdio.h>
 
 /* Whether a modules tests should stop if an assertion failed. */
 extern int su_stop_on_failure;
