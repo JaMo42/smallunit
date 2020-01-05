@@ -30,38 +30,40 @@ extern int su_stop_on_failure;
 
 /* Defines a testing module */
 #define su_module(module_name, body)\
-  void su_concat(su_module_, module_name)() {\
-    int _return = 1;\
-    int _tests_run = 0;\
-    int _errors = 0;\
-    puts("Running module: " su_stringify(module_name));\
-    body\
-    if (_tests_run == 1) {\
-      fputs("Finished: Ran 1 test, ", stdout);\
-    } else {\
-      printf("Finished: Ran %d tests, ", _tests_run);\
-    }\
-    if (!_errors) {\
-      puts("all tests passed");\
-    } else if (_errors == _tests_run) {\
-      puts("all tests failed");\
-    } else {\
-      printf("%d %s\n", _errors, _errors == 1 ? "test failed " : "tests failed");\
-    }\
-  }\
+  void su_concat(su_module_, module_name)() {                 \
+    int _return = 1;                                          \
+    int _tests_run = 0;                                       \
+    int _errors = 0;                                          \
+    puts("Running module: " su_stringify(module_name));       \
+    body                                                      \
+    if (_tests_run == 1) {                                    \
+      fputs("Finished: Ran 1 test, ", stdout);                \
+    } else {                                                  \
+      printf("Finished: Ran %d tests, ", _tests_run);         \
+    }                                                         \
+    if (!_errors) {                                           \
+      puts("all tests passed");                               \
+    } else if (_errors == _tests_run) {                       \
+      puts("all tests failed");                               \
+    } else {                                                  \
+      printf("%d %s\n",                                       \
+             _errors,                                         \
+             _errors == 1 ? "test failed " : "tests failed"); \
+    }                                                         \
+  }                                                           \
 
 /* Defines a test case */
-#define su_test(name, body)\
-  if (_return || !su_stop_on_failure) {\
-    puts(" Running test: " su_stringify(name));\
-    ++_tests_run;\
-    body;\
-    if (_return) {\
-      puts("  Success");\
-    } else {\
-      puts("  Failure");\
-      ++_errors;\
-    }\
+#define su_test(name, body)                     \
+  if (_return || !su_stop_on_failure) {         \
+    puts(" Running test: " su_stringify(name)); \
+    ++_tests_run;                               \
+    body;                                       \
+    if (_return) {                              \
+      puts("  Success");                        \
+    } else {                                    \
+      puts("  Failure");                        \
+      ++_errors;                                \
+    }                                           \
   }
 
 /* Calls a testing module */
@@ -71,19 +73,19 @@ extern int su_stop_on_failure;
 /* Assertions */
 
 #define assert(expr)\
-  {\
-    _return = !!expr;\
-    if (!_return) {\
-      puts("  Assertion failed: " su_stringify(expr));\
-    }\
+  {                                                    \
+    _return = !!expr;                                  \
+    if (!_return) {                                    \
+      puts("  Assertion failed: " su_stringify(expr)); \
+    }                                                  \
   };
 
 #define assert_eq(a, b)\
-  {\
-    _return = (a) == (b);\
-    if (!_return) {\
-      puts("  Assertion failed: " su_stringify(a) " == " su_stringify(b));\
-    }\
+  {                                                                        \
+    _return = (a) == (b);                                                  \
+    if (!_return) {                                                        \
+      puts("  Assertion failed: " su_stringify(a) " == " su_stringify(b)); \
+    }                                                                      \
   }
 
 #endif /* !SMALLUNIT_H */
