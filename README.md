@@ -20,13 +20,13 @@ int do_something(int a, int b) {
 }
 
 // Defines a testing module
-tests(my_test_module, {
+su_module(my_test_module, {
   // Defines a test case
-  test(test_check_something, {
+  su_test(test_check_something, {
     // Asserts an expression to be true
     su_assert(check_something());
   })
-  test(test_something, {
+  su_test(test_something, {
     // Asserts two expression to be equal
     su_assert_eq(do_something(1, 2), 42);
   })
@@ -43,12 +43,12 @@ int main() {
 ```cpp
 #include "test.h"
 
-tests(example, {
-  test(fails, {
+su_module(example, {
+  su_test(fails, {
     su_assert(0);
   })
   // This won't be executed
-  test(wont_run, {
+  su_test(wont_run, {
     ...
   })
 })
