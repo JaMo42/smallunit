@@ -73,7 +73,7 @@ extern int su_stop_on_failure;
 
 /* Assertions */
 
-#define assert(expr)\
+#define su_assert(expr)\
   {                                                    \
     _return = !!expr;                                  \
     if (!_return) {                                    \
@@ -81,7 +81,7 @@ extern int su_stop_on_failure;
     }                                                  \
   };
 
-#define assert_eq(a, b)\
+#define su_assert_eq(a, b)\
   {                                                                        \
     _return = (a) == (b);                                                  \
     if (!_return) {                                                        \
