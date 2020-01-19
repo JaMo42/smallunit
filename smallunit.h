@@ -58,6 +58,7 @@ extern int su_stop_on_failure;
   if (_return || !su_stop_on_failure) {         \
     puts(" Running test: " su_stringify(name)); \
     ++_tests_run;                               \
+    _return = 1;                                \
     body;                                       \
     if (_return) {                              \
       puts("  Success");                        \
