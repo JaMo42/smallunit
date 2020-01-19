@@ -89,4 +89,12 @@ extern int su_stop_on_failure;
     }                                                                      \
   }
 
+#define su_assert_neq(a, b)\
+  {                                                                        \
+    _return = (a) != (b);                                                  \
+    if (!_return) {                                                        \
+      puts("  Assertion failed: " su_stringify(a) " != " su_stringify(b)); \
+    }                                                                      \
+  }
+
 #endif /* !SMALLUNIT_H */
