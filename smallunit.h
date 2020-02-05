@@ -38,6 +38,7 @@ extern int su_stop_on_failure;
     int _errors = 0;                                          \
     puts("Running module: " su_stringify(module_name));       \
     body                                                      \
+    (void)_return;                                            \
     if (_tests_run == 1) {                                    \
       fputs("Finished: Ran 1 test, ", stdout);                \
     } else {                                                  \
