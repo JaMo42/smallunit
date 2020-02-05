@@ -53,7 +53,7 @@ extern int su_stop_on_failure;
              _errors,                                         \
              _errors == 1 ? "test failed " : "tests failed"); \
     }                                                         \
-  }                                                           \
+  }
 
 /* Defines a test case */
 #define su_test(name, body)                     \
