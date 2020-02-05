@@ -30,6 +30,10 @@ extern int su_stop_on_failure;
 #define su_concat(x, y) x##y
 #define su_stringify(s) #s
 
+/* Defines required symbols. */
+#define SU_SOURCE\
+  int su_stop_on_failure = 0
+
 /* Defines a testing module */
 #define su_module(module_name, body)\
   void su_concat(su_module_, module_name)() {                 \

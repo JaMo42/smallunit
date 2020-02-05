@@ -4,4 +4,5 @@
  */
 #include "smallunit.h"
 
-int su_stop_on_failure = 0;
+SU_SOURCE;
+
