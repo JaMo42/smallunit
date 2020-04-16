@@ -1,6 +1,5 @@
-/* This file is not required if you
- * provide your own definition of
- * `su_stop_on_failure' somewhere.
+/* This file is not required if you place
+ * `SU_SOURCE' in one of your sources.
  */
 #include "smallunit.h"
 

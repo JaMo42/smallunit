@@ -82,25 +82,25 @@ extern int su_stop_on_failure;
 
 #define su_assert(expr)\
   {                                                    \
-    _return = !!expr;                                  \
-    if (!_return) {                                    \
+    if (!(expr)) {                                     \
       puts("  Assertion failed: " su_stringify(expr)); \
+      _return = 0;                                     \
     }                                                  \
   };
 
 #define su_assert_eq(a, b)\
   {                                                                        \
-    _return = (a) == (b);                                                  \
-    if (!_return) {                                                        \
+    if (!((a) == (b))) {                                                   \
       puts("  Assertion failed: " su_stringify(a) " == " su_stringify(b)); \
+      _return = 0;                                                         \
     }                                                                      \
   }
 
 #define su_assert_neq(a, b)\
   {                                                                        \
-    _return = (a) != (b);                                                  \
-    if (!_return) {                                                        \
+    if (!((a) != (b))) {                                                   \
       puts("  Assertion failed: " su_stringify(a) " != " su_stringify(b)); \
+      _return = 0;                                                         \
     }                                                                      \
   }
 
