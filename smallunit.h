@@ -69,7 +69,7 @@ extern int su_stop_on_failure;
     if (_return) {                              \
       puts("  Passed");                         \
     } else {                                    \
-      puts("  Failed);                          \
+      puts("  Failed");                         \
       ++_errors;                                \
     }                                           \
   }
