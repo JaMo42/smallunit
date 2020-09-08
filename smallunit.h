@@ -60,18 +60,18 @@ extern int su_stop_on_failure;
   }
 
 /* Defines a test case */
-#define su_test(name, body)                     \
-  if (_return || !su_stop_on_failure) {         \
-    puts(" Running test: " su_stringify(name)); \
-    ++_tests_run;                               \
-    _return = 1;                                \
-    body;                                       \
-    if (_return) {                              \
-      puts("  Passed");                         \
-    } else {                                    \
-      puts("  Failed");                         \
-      ++_errors;                                \
-    }                                           \
+#define su_test(name, body)                                       \
+  if (_return || !su_stop_on_failure) {                           \
+    puts("  Running test: \x1b[1m" su_stringify(name) "\x1b[0m"); \
+    ++_tests_run;                                                 \
+    _return = 1;                                                  \
+    body;                                                         \
+    if (_return) {                                                \
+      puts("    \x1b[1;32mPassed\x1b[0m");                        \
+      } else {                                                    \
+      puts("    \x1b[1;31mFailed\x1b[0m");                        \
+      ++_errors;                                                  \
+    }                                                             \
   }
 
 /* Calls a testing module */
@@ -81,27 +81,27 @@ extern int su_stop_on_failure;
 /* Assertions */
 
 #define su_assert(expr)\
-  {                                                    \
-    if (!(expr)) {                                     \
-      puts("  Assertion failed: " su_stringify(expr)); \
-      _return = 0;                                     \
-    }                                                  \
+  {                                                      \
+    if (!(expr)) {                                       \
+      puts("    Assertion failed: " su_stringify(expr)); \
+      _return = 0;                                       \
+    }                                                    \
   };
 
 #define su_assert_eq(a, b)\
-  {                                                                        \
-    if (!((a) == (b))) {                                                   \
-      puts("  Assertion failed: " su_stringify(a) " == " su_stringify(b)); \
-      _return = 0;                                                         \
-    }                                                                      \
+  {                                                                          \
+    if (!((a) == (b))) {                                                     \
+      puts("    Assertion failed: " su_stringify(a) " == " su_stringify(b)); \
+      _return = 0;                                                           \
+    }                                                                        \
   }
 
 #define su_assert_neq(a, b)\
-  {                                                                        \
-    if (!((a) != (b))) {                                                   \
-      puts("  Assertion failed: " su_stringify(a) " != " su_stringify(b)); \
-      _return = 0;                                                         \
-    }                                                                      \
+  {                                                                          \
+    if (!((a) != (b))) {                                                     \
+      puts("    Assertion failed: " su_stringify(a) " != " su_stringify(b)); \
+      _return = 0;                                                           \
+    }                                                                        \
   }
 
 #endif /* !SMALLUNIT_H */
