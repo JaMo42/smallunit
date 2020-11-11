@@ -78,6 +78,10 @@ extern int su_stop_on_failure;
 #define su_run_module(name)\
   su_concat(su_module_, name)();
 
+/* Declares an external module */
+#define su_extern(name)\
+  extern void su_concat(su_module_, name)();
+
 /* Assertions */
 
 #define su_assert(expr)\
