@@ -1,6 +1,6 @@
 # smallunit
 
-A small unit testing framework for C/C++.
+A small unit testing framework for C.
 
 ## Usage
 
