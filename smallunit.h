@@ -47,7 +47,6 @@ typedef struct
     double su__test_time;                                         \
     void *su__skip;                                               \
     int su__status = SU_PASS;                                     \
-    const char *su__name;                                         \
     unsigned su__passed = 0;                                      \
     puts ("  " display_name);                                     \
     body;                                                         \
@@ -61,23 +60,22 @@ typedef struct
 /* Define a module with the name as display name */
 #define su_module(name, body) su_module_d (name, su__str (name), body)
 
-#define su__test(name, body, id)                                         \
-  if (su__status == SU_FAIL && su_stop_on_failure)                       \
-    {                                                                    \
-      ++su__result.skipped;                                              \
-    }                                                                    \
-  else                                                                   \
-    {                                                                    \
-      su__skip = && su__cat (su__test_case_skip_, id);                   \
-      su__name = su__str(name);                                          \
-      su__status = SU_PASS;                                              \
-      su__start = clock ();                                              \
-      body;                                                              \
-      su__cat (su__test_case_skip_, id):;                                \
-      su__test_time = (double)(clock () - su__start) / CLOCKS_PER_SEC    \
-                      * 1000.0;                                          \
-      su__test_result (&su__result, su__status, su__test_time, su__name, \
-                       &su__passed, su_compact);                         \
+#define su__test(name, body, id)                                       \
+  if (su__status == SU_FAIL && su_stop_on_failure)                     \
+    {                                                                  \
+      ++su__result.skipped;                                            \
+    }                                                                  \
+  else                                                                 \
+    {                                                                  \
+      su__skip = && su__cat (su__test_case_skip_, id);                 \
+      su__status = SU_PASS;                                            \
+      su__start = clock ();                                            \
+      body;                                                            \
+      su__cat (su__test_case_skip_, id):;                              \
+      su__test_time = (double)(clock () - su__start) / CLOCKS_PER_SEC  \
+                      * 1000.0;                                        \
+      su__test_result (&su__result, su__status, su__test_time, name,   \
+                       &su__passed, su_compact);                       \
     }
 
 /* Define a test case */
