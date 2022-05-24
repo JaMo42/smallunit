@@ -140,7 +140,7 @@ su__test_result (SUResult *result, int status, double time, const char *name,
       {
         ++result->passed;
         ++*passed;
-        printf ("    \x1b[32m:) \x1b[1;30m%s\x1b[0m", name);
+        printf ("    \x1b[32m:) \x1b[90m%s\x1b[0m", name);
         if (compact)
           printf (" (%d)\r", *passed);
         else
@@ -151,7 +151,7 @@ su__test_result (SUResult *result, int status, double time, const char *name,
         ++result->failed;
         if (*passed && compact)
           putchar ('\n');
-        printf ("    \x1b[31m:( \x1b[1;30m%s\x1b[0m\n", name);
+        printf ("    \x1b[31m:( \x1b[90m%s\x1b[0m\n", name);
         *passed = 0;
       } break;
     case SU_SKIP:
@@ -159,7 +159,7 @@ su__test_result (SUResult *result, int status, double time, const char *name,
         ++result->skipped;
         if (*passed && compact)
           putchar ('\n');
-        printf ("    \x1b[33m:/ \x1b[1;30m%s\x1b[0m\n", name);
+        printf ("    \x1b[33m:/ \x1b[90m%s\x1b[0m\n", name);
         *passed = 0;
       } break;
     }
@@ -176,9 +176,9 @@ su__print_result (SUResult *result)
   if (result->skipped > 0)
     printf (" \x1b[33m%d skipped", result->skipped);
   if (result->milliseconds < 1000.0)
-    printf (" \x1b[1;30m(%dms)\x1b[0m\n\n", (int)(result->milliseconds + 0.5));
+    printf (" \x1b[90m(%dms)\x1b[0m\n\n", (int)(result->milliseconds + 0.5));
   else
-    printf (" \x1b[1;30m(%ds)\x1b[0m\n\n", (int)(result->milliseconds / 1000.0 + 0.5));
+    printf (" \x1b[90m(%ds)\x1b[0m\n\n", (int)(result->milliseconds / 1000.0 + 0.5));
 }
 
 #endif /* !SMALLUNIT_H */
