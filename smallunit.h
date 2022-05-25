@@ -96,35 +96,35 @@ typedef struct
 /* Assertions */
 
 #define SU__HERE printf ("%s(%d): ", __FILE__, __LINE__);
-#define SU__AF(msg) \
-  { SU__HERE; puts ("Assertion failed:\n  " msg); \
+#define SU__AF(msg)                                                    \
+  { SU__HERE; puts ("Assertion failed:\n  " msg);                      \
     su_fail (); }
-#define SU__AFf(msg, ...) \
+#define SU__AFf(msg, ...)                                              \
   { SU__HERE; printf ("Assertion failed: \n  " msg "\n", __VA_ARGS__); \
     su_fail (); }
 
-#define su_assert(expr)                \
-  {                                    \
-    if (!(expr))                       \
-      SU__AF ("'" su__str (expr) "'"); \
+#define su_assert(expr)       \
+  {                           \
+    if (!(expr))              \
+      SU__AF ("'" #expr "'"); \
   }
 
-#define su_assert_eq(a, b)                             \
-  {                                                    \
-    if (!((a) == (b)))                                 \
-      SU__AF ("'" su__str (a) " == " su__str (b) "'"); \
+#define su_assert_eq(a, b)           \
+  {                                  \
+    if (!((a) == (b)))               \
+      SU__AF ("'" #a " == " #b "'"); \
   }
 
-#define su_assert_arrays_eq(a, b, size)                          \
-  {                                                              \
-    typeof (a) su__a = (a);                                      \
-    typeof (b) su__b = (b);                                      \
-    for (size_t su__i = 0; su__i < size; ++su__i)                \
-      {                                                          \
-        if (su__a[su__i] != su__b[su__i])                        \
-          SU__AFf ("Buffers '" su__str (a) "' and '" su__str (b) \
-                   "' differ at index %zu", su__i);              \
-      }                                                          \
+#define su_assert_arrays_eq(a, b, size)             \
+  {                                                 \
+    typeof (a) su__a = (a);                         \
+    typeof (b) su__b = (b);                         \
+    for (size_t su__i = 0; su__i < size; ++su__i)   \
+      {                                             \
+        if (su__a[su__i] != su__b[su__i])           \
+          SU__AFf ("Buffers '" #a "' and '" #b      \
+                   "' differ at index %zu", su__i); \
+      }                                             \
   }
 
 
