@@ -28,8 +28,8 @@ enum
 
 typedef struct
 {
-  unsigned failed;
   unsigned passed;
+  unsigned failed;
   unsigned skipped;
   double milliseconds;
 } SUResult;
