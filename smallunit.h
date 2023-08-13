@@ -53,7 +53,7 @@ typedef struct
     putchar ('\n');                                               \
     if (su_compact && su__passed)                                 \
       putchar ('\n');                                             \
-    su__print_result (&su__result);                               \
+    su_print_result (&su__result);                                \
     return su__result;                                            \
   }
 
@@ -166,7 +166,7 @@ su__test_result (SUResult *result, int status, double time, const char *name,
 }
 
 static inline void
-su__print_result (SUResult *result)
+su_print_result (SUResult *result)
 {
   putchar (' ');
   if (result->passed > 0)
@@ -179,6 +179,21 @@ su__print_result (SUResult *result)
     printf (" \x1b[90m(%dms)\x1b[0m\n\n", (int)(result->milliseconds + 0.5));
   else
     printf (" \x1b[90m(%ds)\x1b[0m\n\n", (int)(result->milliseconds / 1000.0 + 0.5));
+}
+
+static inline SUResult
+su_new_result()
+{
+  return (SUResult) { 0, 0, 0, 0.0 };
+}
+
+static inline void
+su_add_result(SUResult *to, SUResult result)
+{
+  to->passed += result.passed;
+  to->failed += result.failed;
+  to->skipped += result.skipped;
+  to->milliseconds += result.milliseconds;
 }
 
 #endif /* !SMALLUNIT_H */
