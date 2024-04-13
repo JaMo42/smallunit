@@ -96,11 +96,38 @@ su_assert_eq (a, b);
 
 Asserts that `a == b`.
 
+If both parameters are either `char *`, or `const char *`, asserts that `strcmp(a, b) == 0`.
+
 ```c
 su_assert_arrays_eq (a, b, count);
 ```
 
 For each index `i` from `0` to `count`, asserts that `a[i] == b[i]`.
+
+## Printing asserted values
+
+If [fmt](https://github.com/JaMo42/fmt) or [icecream-c](https://github.com/JaMo42/icecream-c) are included the values of failed assertions are printed, if supported by those libraries (with fmt unsupported values are not printed at all, with icecream `?` is printed).
+fmt also provides better string output, escaping non-printable characters and newlines/carriage returns.
+
+Example:
+
+```c
+su_test("case", {
+    // Note that string literals are a sized array types and cannot be passed
+    // to the assert macros directly, but need to be passed via a variable like
+    // here or cast to a pointer.
+    const char *s1 = "Hello";
+    const char *s2 = "Hello\n";
+    su_assert_eq(s1, s2);
+}
+```
+
+```
+test.c(10): Assertion failed:
+  's1 == s2'
+    with lhs: "Hello"
+    with rhs: "Hello\n"
+```
 
 ## Examples
 
@@ -215,3 +242,4 @@ su_module (blabla, {
 })
 ```
 
+- Requires C23 (`typeof`, `#elifdef`, `[[maybe_unused]]`)

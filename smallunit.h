@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdbool.h>
 #include <time.h>
+#include <string.h>
 
 #ifdef __clang__
 #  define typeof(x) __typeof__(x)
@@ -96,35 +97,89 @@ typedef struct
 /* Assertions */
 
 #define SU__HERE printf ("%s(%d): ", __FILE__, __LINE__);
-#define SU__AF(msg)                                                    \
-  { SU__HERE; puts ("Assertion failed:\n  " msg);                      \
-    su_fail (); }
-#define SU__AFf(msg, ...)                                              \
-  { SU__HERE; printf ("Assertion failed: \n  " msg "\n", __VA_ARGS__); \
-    su_fail (); }
 
-#define su_assert(expr)       \
-  {                           \
-    if (!(expr))              \
-      SU__AF ("'" #expr "'"); \
+#define SU__AF(msg) \
+  { SU__HERE; puts ("Assertion failed:\n  " msg); }
+
+#define SU__AFf(msg, ...) \
+  { SU__HERE; printf ("Assertion failed: \n  " msg "\n", __VA_ARGS__); }
+
+#define SU__EQ(a, b)                                                         \
+    _Generic((a),                                                            \
+        /* Note: all _Generic paths must typecheck for any value, including
+           float, so we need to do this casting for the strings, there is no
+           type punning happening here. */                                   \
+        const char *: _Generic((b),                                          \
+            const char*: strcmp(*(const char**)&a, *(const char**)&b) == 0,  \
+            char*: strcmp(*(const char**)&a, *(const char**)&b) == 0,        \
+            default: (a) == (b)                                              \
+        ),                                                                   \
+        char *: _Generic((b),                                                \
+            const char *: strcmp(*(const char**)&a, *(const char**)&b) == 0, \
+            char *: strcmp(*(const char**)&a, *(const char**)&b) == 0,       \
+            default: (a) == (b)                                              \
+        ),                                                                   \
+        default: (a) == (b)                                                  \
+    )
+
+#ifdef FMT_H
+#define SU__PRINT_VALUE(prefix, v)                                \
+    do {                                                          \
+        if (fmt_can_print(v)) {                                   \
+            fmt_println("{}: \x1b[36m{:?}\x1b[m", (prefix), (v)); \
+        }                                                         \
+    } while (0)
+#elifdef IC_H
+#define SU__PRINT_VALUE(prefix, v)                             \
+    do {                                                       \
+        /* IC_STREAM may be stderr (it's the default) so we
+           need to flush stdout to get the output in order. */ \
+        fflush(stdout);                                        \
+        fputs(prefix, IC_STREAM);                              \
+        fputs(": ", IC_STREAM);                                \
+        ic__print_value(v);                                    \
+        fputs("\x1b[m\n", IC_STREAM);                          \
+    } while (0)
+#else
+#define SU__PRINT_VALUE(prefix, v)
+#endif
+
+#define su_assert(expr)                           \
+  {                                               \
+    typeof(expr) su__expr = (expr);               \
+    if (!su__expr) {                              \
+      SU__AF ("'" #expr "'");                     \
+      SU__PRINT_VALUE("    with expr", su__expr); \
+      su_fail();                                  \
+    }                                             \
   }
 
-#define su_assert_eq(a, b)           \
-  {                                  \
-    if (!((a) == (b)))               \
-      SU__AF ("'" #a " == " #b "'"); \
+#define su_assert_eq(a, b)                    \
+  {                                           \
+    typeof(a) su__a = (a);                    \
+    typeof(b) su__b = (b);                    \
+    if (!SU__EQ(su__a, su__b)) {              \
+      SU__AF ("'" #a " == " #b "'");          \
+      SU__PRINT_VALUE("    with lhs", su__a); \
+      SU__PRINT_VALUE("    with rhs", su__b); \
+      su_fail();                              \
+    }                                         \
   }
 
-#define su_assert_arrays_eq(a, b, size)             \
-  {                                                 \
-    typeof (a) su__a = (a);                         \
-    typeof (b) su__b = (b);                         \
-    for (size_t su__i = 0; su__i < size; ++su__i)   \
-      {                                             \
-        if (su__a[su__i] != su__b[su__i])           \
-          SU__AFf ("Buffers '" #a "' and '" #b      \
-                   "' differ at index %zu", su__i); \
-      }                                             \
+#define su_assert_arrays_eq(a, b, size)                  \
+  {                                                      \
+    typeof (a) su__a = (a);                              \
+    typeof (b) su__b = (b);                              \
+    for (size_t su__i = 0; su__i < size; ++su__i)        \
+      {                                                  \
+        if (!SU__EQ(su__a[su__i], su__b[su__i])) {       \
+          SU__AFf ("Buffers '" #a "' and '" #b           \
+                   "' differ at index %zu", su__i);      \
+          SU__PRINT_VALUE("    with lhs", su__a[su__i]); \
+          SU__PRINT_VALUE("    with rhs", su__b[su__i]); \
+          su_fail();                                     \
+        }                                                \
+      }                                                  \
   }
 
 
@@ -181,13 +236,13 @@ su_print_result (SUResult *result)
     printf (" \x1b[90m(%ds)\x1b[0m\n\n", (int)(result->milliseconds / 1000.0 + 0.5));
 }
 
-static inline SUResult
+[[maybe_unused]] static inline SUResult
 su_new_result()
 {
   return (SUResult) { 0, 0, 0, 0.0 };
 }
 
-static inline void
+[[maybe_unused]] static inline void
 su_add_result(SUResult *to, SUResult result)
 {
   to->passed += result.passed;
