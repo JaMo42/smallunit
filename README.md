@@ -107,7 +107,7 @@ For each index `i` from `0` to `count`, asserts that `a[i] == b[i]`.
 ## Printing asserted values
 
 If [fmt](https://github.com/JaMo42/fmt) or [icecream-c](https://github.com/JaMo42/icecream-c) are included the values of failed assertions are printed, if supported by those libraries (with fmt unsupported values are not printed at all, with icecream `?` is printed).
-fmt also provides better string output, escaping non-printable characters and newlines/carriage returns.
+fmt also provides better string output, escaping non-printable characters and newlines/carriage returns, and requires linking with `-lm`.
 
 Example:
 
@@ -243,3 +243,7 @@ su_module (blabla, {
 ```
 
 - Requires C23 (`typeof`, `#elifdef`, `[[maybe_unused]]`)
+
+## License
+
+2-Clause BSD License (it's at the bottom of the header).
