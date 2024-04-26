@@ -20,6 +20,12 @@
 #define su__str(x) su__str_impl (x)
 #define su__cat(x, y) x##y
 
+#ifdef __cplusplus
+#define su__typeof(x) decltype(x)
+#else
+#define su__typeof(x) typeof(x)
+#endif
+
 enum
 {
   SU_FAIL,
@@ -104,6 +110,15 @@ typedef struct
 #define SU__AFf(msg, ...) \
   { SU__HERE; printf ("Assertion failed: \n  " msg "\n", __VA_ARGS__); }
 
+#ifdef __cplusplus
+static inline bool SU__EQ(const char *a, const char *b) {
+    return strcmp(a, b) == 0;
+}
+template<class A, class B>
+static inline bool SU__EQ(A a, B b) {
+    return a == b;
+}
+#else
 #define SU__EQ(a, b)                                                         \
     _Generic((a),                                                            \
         /* Note: all _Generic paths must typecheck for any value, including
@@ -121,6 +136,7 @@ typedef struct
         ),                                                                   \
         default: (a) == (b)                                                  \
     )
+#endif
 
 #ifdef FMT_H
 #define SU__PRINT_VALUE(prefix, v)                                \
@@ -146,7 +162,7 @@ typedef struct
 
 #define su_assert(expr)                           \
   {                                               \
-    typeof(expr) su__expr = (expr);               \
+    su__typeof(expr) su__expr = (expr);           \
     if (!su__expr) {                              \
       SU__AF ("'" #expr "'");                     \
       SU__PRINT_VALUE("    with expr", su__expr); \
@@ -156,8 +172,8 @@ typedef struct
 
 #define su_assert_eq(a, b)                    \
   {                                           \
-    typeof(a) su__a = (a);                    \
-    typeof(b) su__b = (b);                    \
+    su__typeof(a) su__a = (a);                \
+    su__typeof(b) su__b = (b);                \
     if (!SU__EQ(su__a, su__b)) {              \
       SU__AF ("'" #a " == " #b "'");          \
       SU__PRINT_VALUE("    with lhs", su__a); \
@@ -168,8 +184,8 @@ typedef struct
 
 #define su_assert_arrays_eq(a, b, size)                  \
   {                                                      \
-    typeof (a) su__a = (a);                              \
-    typeof (b) su__b = (b);                              \
+    su__typeof (a) su__a = (a);                          \
+    su__typeof (b) su__b = (b);                          \
     for (size_t su__i = 0; su__i < size; ++su__i)        \
       {                                                  \
         if (!SU__EQ(su__a[su__i], su__b[su__i])) {       \
@@ -184,7 +200,7 @@ typedef struct
 
 #define su_bad_value(x, why)                   \
     {                                          \
-        typeof(x) su__x = (x);                 \
+        su__typeof(x) su__x = (x);             \
         SU__HERE;                              \
         puts("Bad value:");                    \
         puts("  '" #x "' " why);               \
