@@ -2,247 +2,135 @@
 
 A small unit testing framework for C.
 
+v2: https://raw.githubusercontent.com/JaMo42/smallunit/b70cd334e36bf320b38db8037773fcfa02bf9aa9/smallunit.h
+
+## Requirements
+
+- `std_ds.h` (https://nothings.org/stb_ds/, https://github.com/nothings/stb/blob/master/stb_ds.h)
+
+- C only, Linux, and GNU extensions
+
 ## Usage
 
-### Defining a module
+See `test.c`.
 
-With custom name:
-```c
-su_module_d (module_name, "Module Name", { ... })
-```
-
-`module_name` must be valid C identifier but may also start with a number.
-
-With default name:
-```c
-su_module (module_name, { ... })
-```
-This uses the module name as display name.
-
-### Declaring an external module
-
-```
-su_extern (module_name);
-```
-
-### Module options
+### Defining the symbols
 
 ```c
-su_module (my_module, {
-  su_stop_on_failure = false;
-  su_compact = false;
-})
+#define SU_IMPLEMENTATION
+#define STB_DS_IMPLEMENTATION
+#include "smallunit.h"
 ```
 
-- `su_stop_on_failure` stop module execution once a test fails (defaults to `false`)
-
-- `su_compact` squish subsequent passing tests into one line (see in examples) (defaults to `false`)
-
-The default values can be changed by defining `SU_COMPACT_DEFAULT` or `SU_STOP_ON_FAILURE_DEFAULT` as respectively.
-
-### Defining a test case
+### Declaring tests
 
 ```c
-su_module (my_module, {
-  su_test ("My test case", {
-    ...
-  })
-})
-```
-
-### Running a module
-
-```c
-SUResult result = su_run_module (module_name);
-```
-
-The `SUResult` structure is declared as
-
-```c
-typedef struct
-{
-  unsigned failed;
-  unsigned passed;
-  unsigned skipped;
-  double milliseconds;
-} SUResult;
-```
-
-- `failed`, `passed`, `skipped` number of tests failed/passed/skipped
-
-- `milliseconds` time taken in milliseconds
-
-### Flow control
-
-```c
-su_pass ();
-su_fail ();
-su_skip ();
-```
-
-Use inside a test case to abort and pass/fail/skip it.
-
-### Assertions
-
-```c
-su_assert (expr);
-```
-
-Asserts that `expr` is `true`.
-
-```c
-su_assert_eq (a, b);
-```
-
-Asserts that `a == b`.
-
-If both parameters are either `char *`, or `const char *`, asserts that `strcmp(a, b) == 0`.
-
-```c
-su_assert_arrays_eq (a, b, count);
-```
-
-For each index `i` from `0` to `count`, asserts that `a[i] == b[i]`.
-
-## Printing asserted values
-
-If [fmt](https://github.com/JaMo42/fmt) or [icecream-c](https://github.com/JaMo42/icecream-c) are included the values of failed assertions are printed, if supported by those libraries (with fmt unsupported values are not printed at all, with icecream `?` is printed).
-fmt also provides better string output, escaping non-printable characters and newlines/carriage returns, and requires linking with `-lm`.
-
-Example:
-
-```c
-su_test("case", {
-    // Note that string literals are a sized array types and cannot be passed
-    // to the assert macros directly, but need to be passed via a variable like
-    // here or cast to a pointer.
-    const char *s1 = "Hello";
-    const char *s2 = "Hello\n";
-    su_assert_eq(s1, s2);
+su_test(module_name, test_name) {
 }
 ```
 
-```
-test.c(10): Assertion failed:
-  's1 == s2'
-    with lhs: "Hello"
-    with rhs: "Hello\n"
-```
+- Defines a test case in a stateless module.
 
-## Examples
+- Modules are just groups of tests, either stateless or fixtures, their naming is adopted from previous incarnations of this library
 
-### Assertions
+### Fixtures
 
 ```c
-su_module (my_module, {
-  su_test ("Assert expression", {
-    su_assert (1);
-    su_assert (0);
-  })
+typedef struct {
+    bool value;
+} thing_test;
 
-  su_test ("Assert equality", {
-    su_assert_eq (1, 1);
-    su_assert_eq (1, 2);
-  })
+void thing_test_setup(thing_test *self) {
+    self->value = true;
+}
 
-  su_test ("Assert equality of arrays", {
-    const char *s1 = "Hello World";
-    const char *s2 = "Hello Sailor";
-    su_assert_arrays_eq (s1, s2, 11);
-  })
-})
+void thing_test_tear_down(thing_test *self) {
+}
+
+su_test_f(thing_test, test_name) {
+    su_expect(self->value);
+}
 ```
 
-Output:
+- The naming matters here, the first parameter of `su_test_f` must be the type name of the fixture, which must be typedef'd, and the `<typename>_setup` and `<typename>_tear_down` functions must exist.
 
-```
-  my_module
-a.c(18): Assertion failed:
-  '0'
-    :( Assert expression
-a.c(23): Assertion failed:
-  '1 == 2'
-    :( Assert equality
-a.c(30): Assertion failed:
-  Buffers 's1' and 's2' differ at index 6
-    :( Assert equality of arrays
+- Prior to calling `setup` the value is zeroed.
 
-  3 failing (0ms)
-```
+- The identifier for the fixture object inside the test cases can be changed by defining `SU_FIXTURE_IDENTIFIER`, and defaults to `self`.
 
-### Stopping on failure
+### Running
 
 ```c
-su_module (example, {
-  su_stop_on_failure = true;
-  su_test ("Passing Test", { su_pass (); })
-  su_test ("Failing Test", { su_fail (); })
-  su_test ("Passing Test", { su_pass (); })
-})
+int main(void) {
+    return su_run_all_tests();
+}
 ```
 
-Output:
+All modules, fixtures, and tests are added automatically, `su_run_all_tests` runs them and provides a return value for the main function, being `1` if any test failed and `0` otherwise (including if tests were skipped).
 
-```
-  example
-    :) Passing Test
-    :( Failing Test
+Modules (both stateless and fixtures), and the tests inside them are run in declaration order.
 
-  1 passing 1 failing 1 skipped (0ms)
-```
+### Short names
 
-### Compact output
+If `SU_NO_SHORT_NAMES` is not defined, the `su_name` macros will have `NAME` defined as an alias (`su_test_f` => `TEST_F`, `su_expect_eq` => `EXPECT_EQ`, etc.), generally matching macro names from GoogleTest.
 
-```c
-su_module (a_lot_of_passing_tests, {
-  su_compact = true;
-  su_test ("Passing Test", { su_pass (); })
-  su_test ("Passing Test", { su_pass (); })
-  su_test ("Passing Test", { su_pass (); })
-  su_test ("Failing Test", { su_fail (); })
-  su_test ("Passing Test", { su_pass (); })
-  su_test ("Passing Test", { su_pass (); })
-  su_test ("Passing Test", { su_pass (); })
-  su_test ("Passing Test", { su_pass (); })
-  su_test ("Passing Test", { su_pass (); })
-  su_test ("Passing Test", { su_pass (); })
-  su_test ("Passing Test", { su_pass (); })
-  su_test ("Failing Test", { su_fail (); })
-  su_test ("Passing Test", { su_pass (); })
-  su_test ("Passing Test", { su_pass (); })
-  su_test ("Passing Test", { su_pass (); })
-  su_test ("Passing Test", { su_pass (); })
-})
-```
+## Assertions
 
-Output:
+Almost all assertions come in two flavors: `su_expect...` and `su_assert...`.
+These behave like in GoogleTest, where `expect` will fail the test case but keep running it, and `assert` will immediately return from the current function on failure.
+The only exceptions are the death tests which only have `expect`.
 
-```
-  a_lot_of_passing_tests
-    :) Passing Test (3)
-    :( Failing Test
-    :) Passing Test (7)
-    :( Failing Test
-    :) Passing Test (4)
+### Basic
 
-  14 passing 2 failing (0ms)
-```
+Fatal Assertion | Nonfatal Assertion | Verifies
+---|---|---
+su_assert(*condition*) | su_expect(condition) | *condition* is true
 
-### Limitations
+### Binary
 
-- Requires GCC or clang
+Fatal Assertion | Nonfatal Assertion | Verifies
+---|---|---
+su_assert_eq(*a*, *b*) | su_expect_eq(*a*, *b*) | *a* == *b*
+su_assert_ne(*a*, *b*) | su_expect_ne(*a*, *b*) | *a* != *b*
 
-- Due to some problem with macros, designated initializers need some extra parentheses:
+### C strings
 
-```c
-struct Pair { int x; int y; };
+Fatal Assertion | Nonfatal Assertion | Verifies
+---|---|---
+su_assert_streq(*a*, *b*) | su_expect_streq(*a*, *b*) | the two C strings have the same content
+su_assert_strne(*a*, *b*) | su_expect_strne(*a*, *b*) | the two C strings have different content
 
-su_module (blabla, {
-  struct Pair my_pair = ((struct Pair) { .x = 1, .y = 2 });
-})
-```
+### Floats
 
-- Requires C23 (`typeof`, `#elifdef`, `[[maybe_unused]]`)
+Fatal Assertion | Nonfatal Assertion | Verifies
+---|---|---
+su_assert_float_eq(*a*, *b*) | su_expect_float_eq(*a*, *b*) | The two float values are almost equal
+su_assert_double_eq(*a*, *b*) | su_expect_double_eq(*a*, *b*) | The two double values are almost equal
+su_assert_near(*a*, *b*, *abs_err*) | su_expect_near(*a*, *b*, *abs_err*) | The difference between the two values doesn't exceed *abs_err*.
+
+"almost equal" means the two values are within 4 ULP's from each other.
+
+### Death tests
+
+Nonfatal Assertion | Verifies
+---|---
+su_expect_exit(*statement*, *predicate*, *output*) | that *statement* causes the process to terminate in away that matches *predicate*, and produces the specified `stderr` output.
+su_expect_death(*statement*, *output*) | that *statement* causes the process to terminate with a non-zero exit code and produces the specified `stderr` output.
+
+If *output* is `NULL` the output is not checked.
+By default only `4096` bytes of output are captured, this can be increased by defining `SU_STDERR_BUF_SIZE`.
+
+Predicate | Requires
+---|---
+su_exited_with_code(*code*) | The program exited normally with `code`
+su_killed_by_signal(*signal_number*) | The program was killed by the given signal
+su_exited_abnormally() | The program exited with a non-zero exit code or was killed by any signal
+
+### Explicit control flow
+
+Function | Description
+---|---
+su_skip() | Marks the test as skipped and stops execution of the test
 
 ## License
 

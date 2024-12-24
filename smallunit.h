@@ -1,282 +1,741 @@
+// https://github.com/JaMo42/smallunit
 #ifndef SMALLUNIT_H
 #define SMALLUNIT_H
-#include <stdio.h>
+#include <float.h>
+#include <math.h>
 #include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <time.h>
-#include <string.h>
 
-#ifdef __clang__
-#  define typeof(x) __typeof__(x)
+#include "stb_ds.h"
+
+#ifndef SU_FIXTURE_IDENTIFIER
+#define SU_FIXTURE_IDENTIFIER self
 #endif
 
-#ifndef SU_COMAPCT_DEFAULT
-#define SU_COMPACT_DEFAULT false
-#endif
-#ifndef SU_STOP_ON_FAILURE_DEFAULT
-#define SU_STOP_ON_FAILURE_DEFAULT false
+#ifndef SU_STDERR_BUF_SIZE
+#define SU_STDERR_BUF_SIZE 4096
 #endif
 
-#define su__str_impl(x) #x
-#define su__str(x) su__str_impl (x)
-#define su__cat(x, y) x##y
-
-#ifdef __cplusplus
-#define su__typeof(x) decltype(x)
+#if __has_include(<valgrind/valgrind.h>)
+#include <valgrind/valgrind.h>
+#define SU_HAS_VALGRIND
+#define SU_RUNNING_ON_VALGRIND RUNNING_ON_VALGRIND
 #else
-#define su__typeof(x) typeof(x)
+#define SU_RUNNING_ON_VALGRIND false
 #endif
 
-enum
-{
-  SU_FAIL,
-  SU_PASS,
-  SU_SKIP
+#ifndef SU_NO_SHORT_NAMES
+#define TEST su_test
+#define TEST_F su_test_f
+
+#define SKIP su_skip
+
+#define EXPECT su_expect
+#define EXPECT_EQ su_expect_eq
+#define EXPECT_NE su_expect_ne
+#define EXPECT_STREQ su_expect_streq
+#define EXPECT_STRNE su_expect_strne
+#define EXPECT_FLOAT_EQ su_expect_float_eq
+#define EXPECT_DOUBLE_EQ su_expect_double_eq
+#define EXPECT_NEAR su_expect_near
+
+#define ASSERT su_assert
+#define ASSERT_EQ su_assert_eq
+#define ASSERT_NE su_assert_ne
+#define ASSERT_STREQ su_assert_streq
+#define ASSERT_STRNE su_assert_strne
+#define ASSERT_FLOAT_EQ su_assert_float_eq
+#define ASSERT_DOUBLE_EQ su_assert_double_eq
+#define ASSERT_NEAR su_assert_near
+
+#define EXPECT_EXIT su_expect_exit
+#define EXPECT_DEATH su_expect_death
+#endif
+
+#define su_str_inner(x) #x
+#define su_str(x) su_str_inner(x)
+#define su_cat_inner(x, y) x##y
+#define su_cat(x, y) su_cat_inner(x, y)
+#define su_cat3_inner(x, y, z) x##y##z
+#define su_cat3(x, y, z) su_cat3_inner(x, y, z)
+
+#define su_arrpush(arr)                              \
+    ({                                               \
+        typeof(arr) _ptr = stbds_arraddnptr(arr, 1); \
+        memset(_ptr, 0, sizeof(*_ptr));              \
+        _ptr;                                        \
+    })
+
+typedef enum {
+    SU_PASS,
+    SU_FAIL,
+    SU_SKIP,
+} su_status_t;
+
+typedef struct {
+    // ms * 10 + one decimal place
+    uint64_t value;
+} su_time_t;
+
+su_time_t su_time_from(struct timespec t);
+su_time_t su_time_add(su_time_t a, su_time_t b);
+su_time_t su_time_sub(su_time_t a, su_time_t b);
+double su_time_ms(su_time_t t);
+
+typedef struct {
+    int pid;
+    int rx;
+    int tx;
+} su_subproc_info_t;
+
+su_subproc_info_t su_subproc_begin(void);
+
+typedef struct {
+    int status;  // encoded value of waitpid
+    char *_stderr_buf;
+    const char *standard_error;
+} su_subproc_result_t;
+
+su_subproc_result_t su_subproc_end(su_subproc_info_t info);
+
+typedef struct {
+    int code_or_signal;
+    bool is_signal;
+    bool any_abnormal;
+    const char *output;
+} su_subproc_predicate_t;
+
+su_subproc_predicate_t su_exited_with_code(int code);
+su_subproc_predicate_t su_killed_by_signal(int signal);
+su_subproc_predicate_t su_exited_abnormally(void);
+bool su_subproc_predicate_matches_status(su_subproc_predicate_t predicate, int status);
+
+/// Returns `true` if the assertion should fail!
+bool su_check_subproc_result(
+    const su_subproc_result_t *result,
+    su_subproc_predicate_t predicate,
+    const char *test_name,
+    int line
+);
+
+typedef struct su_test su_test_t;
+
+typedef void (*su_stateless_test_fn_t)(su_test_t *);
+typedef void (*su_fixture_test_fn_t)(su_test_t *, void *);
+typedef void *su_test_fn_t;
+
+struct su_test {
+    const char *name;
+    su_status_t status;
+    su_time_t runtime;
+    su_test_fn_t fn;
 };
 
-typedef struct
-{
-  unsigned passed;
-  unsigned failed;
-  unsigned skipped;
-  double milliseconds;
-} SUResult;
+typedef struct {
+    void (*init)(void *);
+    void (*clean)(void *);
+    void (*run)(void *, su_test_t *);
+} su_module_vtable_t;
 
-/* Define a module */
-#define su_module_d(name, display_name, body)                     \
-  SUResult su__cat (su__module_, name) ()                         \
-  {                                                               \
-    bool su_stop_on_failure = SU_STOP_ON_FAILURE_DEFAULT;         \
-    bool su_compact = SU_COMPACT_DEFAULT;                         \
-    SUResult su__result = (SUResult) {                            \
-      .passed = 0, .failed = 0, .skipped = 0, .milliseconds = 0.0 \
-    };                                                            \
-    clock_t su__start;                                            \
-    double su__test_time;                                         \
-    void *su__skip;                                               \
-    int su__status = SU_PASS;                                     \
-    unsigned su__passed = 0;                                      \
-    puts ("  " display_name);                                     \
-    body;                                                         \
-    putchar ('\n');                                               \
-    if (su_compact && su__passed)                                 \
-      putchar ('\n');                                             \
-    su_print_result (&su__result);                                \
-    return su__result;                                            \
-  }
+typedef struct {
+    const su_module_vtable_t *vtable;
+    su_test_t *tests;
+    const char *name;
+    su_time_t runtime;
+    unsigned counts[3];
+} su_module_t;
 
-/* Define a module with the name as display name */
-#define su_module(name, body) su_module_d (name, su__str (name), body)
+void su_module_run_test(su_module_t *mod, su_test_t *test);
+void su_module_run(su_module_t *mod);
 
-#define su__test(name, body, id)                                       \
-  if (su__status == SU_FAIL && su_stop_on_failure)                     \
-    {                                                                  \
-      ++su__result.skipped;                                            \
-    }                                                                  \
-  else                                                                 \
-    {                                                                  \
-      su__skip = && su__cat (su__test_case_skip_, id);                 \
-      su__status = SU_PASS;                                            \
-      su__start = clock ();                                            \
-      body;                                                            \
-      su__cat (su__test_case_skip_, id):;                              \
-      su__test_time = (double)(clock () - su__start) / CLOCKS_PER_SEC  \
-                      * 1000.0;                                        \
-      su__test_result (&su__result, su__status, su__test_time, name,   \
-                       &su__passed, su_compact);                       \
-    }
+typedef struct {
+    su_module_t mod;
+    void *fixture;
+    size_t object_size;
+    void (*setup)(void *);
+    void (*tear_down)(void *);
+} su_fixture_owner_t;
 
-/* Define a test case */
-#define su_test(name, body) su__test (name, body, __LINE__)
+typedef struct {
+    bool skip_death_tests;
+} su_options_t;
 
-/* Run a module */
-#define su_run_module(name) su__cat (su__module_, name) ()
+void su_options_default(su_options_t *options);
 
-/* Declare an external module */
-#define su_extern(name) extern SUResult su__cat (su__module_, name) ()
+typedef struct {
+    su_module_t **modules;
 
-/* Flow control */
+    struct {
+        const char *key;
+        su_module_t *value;
+    } *modules_by_name;
 
-#define su_pass() { su__status = SU_PASS; goto *su__skip; }
-#define su_fail() { su__status = SU_FAIL; goto *su__skip; }
-#define su_skip() { su__status = SU_SKIP; goto *su__skip; }
+    struct {
+        const char *key;
+        su_fixture_owner_t *value;
+    } *fixtures_by_name;
 
-/* Assertions */
+    struct {
+        const char *key;
+        const char *value;
+    } *test_names;
 
-#define SU__HERE printf ("%s(%d): ", __FILE__, __LINE__);
+    su_options_t options;
+    // we want runtime defaults so we cannot statically initialize options
+    // with their default values
+    bool options_initialized;
+} su_state_t;
 
-#define SU__AF(msg) \
-  { SU__HERE; puts ("Assertion failed:\n  " msg); }
+/// Get or create a module.
+su_module_t *su_state_get_module(su_state_t *state, const char *name);
+/// Get or create a fixture owner.
+su_fixture_owner_t *su_state_get_fixture(su_state_t *state, const char *name);
+/// Set a pretty test function name.
+void su_state_set_test_name(su_state_t *state, const char *function_name, const char *pretty_name);
+/// Get a pretty test function name.
+const char *su_state_test_name(su_state_t *state, const char *function_name);
+/// Free all memory of the state.
+void su_state_drop(su_state_t *state);
 
-#define SU__AFf(msg, ...) \
-  { SU__HERE; printf ("Assertion failed: \n  " msg "\n", __VA_ARGS__); }
+extern su_state_t su__state;
 
-#ifdef __cplusplus
-static inline bool SU__EQ(const char *a, const char *b) {
-    return strcmp(a, b) == 0;
-}
-template<class A, class B>
-static inline bool SU__EQ(A a, B b) {
-    return a == b;
-}
-#else
-#define SU__EQ(a, b)                                                         \
-    _Generic((a),                                                            \
-        /* Note: all _Generic paths must typecheck for any value, including
-           float, so we need to do this casting for the strings, there is no
-           type punning happening here. */                                   \
-        const char *: _Generic((b),                                          \
-            const char*: strcmp(*(const char**)&a, *(const char**)&b) == 0,  \
-            char*: strcmp(*(const char**)&a, *(const char**)&b) == 0,        \
-            default: (a) == (b)                                              \
-        ),                                                                   \
-        char *: _Generic((b),                                                \
-            const char *: strcmp(*(const char**)&a, *(const char**)&b) == 0, \
-            char *: strcmp(*(const char**)&a, *(const char**)&b) == 0,       \
-            default: (a) == (b)                                              \
-        ),                                                                   \
-        default: (a) == (b)                                                  \
-    )
-#endif
+typedef struct {
+    uint64_t bits;
+    bool is_nan;
+    bool is_inf;
+    bool sign;
+    unsigned char sign_bit_index;
+} su_float_t;
 
-#ifdef FMT_H
-#define SU__PRINT_VALUE(prefix, v)                                \
-    do {                                                          \
-        if (fmt_can_print(v)) {                                   \
-            fmt_println("{}: \x1b[36m{:?}\x1b[m", (prefix), (v)); \
-        }                                                         \
+su_float_t su_float_float(float a);
+su_float_t su_float_double(double a);
+bool su_float_eq(su_float_t a, su_float_t b);
+
+/// Returns 0 if no tests failed.
+int su_run_all_tests(void);
+
+void su_release_state(void);
+
+#define su_test_name(mod, test) su_test_##mod##_##test
+
+#define su_test(_mod, _test)                                                                     \
+    void su_test_name(_mod, _test)(su_test_t *);                                                 \
+    static void __attribute__((constructor)) su_cat3(su__register_, _mod, _test)() {             \
+        su_module_t *mod = su_state_get_module(&su__state, su_str(_mod));                        \
+        su_test_t *test = su_arrpush(mod->tests);                                                \
+        test->name = su_str(_test);                                                              \
+        test->fn = (su_test_fn_t)su_test_name(_mod, _test);                                      \
+        su_state_set_test_name(&su__state, su_str(su_test_name(_mod, _test)), #_mod "." #_test); \
+    }                                                                                            \
+    void su_test_name(_mod, _test)(su_test_t * su_self)
+
+#define su_test_f(_fixture, _test)                                                        \
+    void su_test_name(_fixture, _test)(su_test_t *, _fixture *);                          \
+    static void __attribute__((constructor)) su_cat3(su__register_, _fixture, _test)() {  \
+        su_fixture_owner_t *fixture = su_state_get_fixture(&su__state, su_str(_fixture)); \
+        su_test_t *test = su_arrpush(fixture->mod.tests);                                 \
+        test->name = su_str(_test);                                                       \
+        test->fn = (su_test_fn_t)su_test_name(_fixture, _test);                           \
+        fixture->object_size = sizeof(_fixture);                                          \
+        fixture->setup = (void (*)(void *))_fixture##_setup;                              \
+        fixture->tear_down = (void (*)(void *))_fixture##_tear_down;                      \
+        su_state_set_test_name(                                                           \
+            &su__state, su_str(su_test_name(_fixture, _test)), #_fixture "." #_test       \
+        );                                                                                \
+    }                                                                                     \
+    void su_test_name(_fixture, _test)(su_test_t * su_self, _fixture * SU_FIXTURE_IDENTIFIER)
+
+#define su_pretty_function() su_state_test_name(&su__state, __PRETTY_FUNCTION__)
+
+#define su_skip()                         \
+    do {                                  \
+        if (su_self->status == SU_PASS) { \
+            su_self->status = SU_SKIP;    \
+        }                                 \
+        return;                           \
     } while (0)
-#elifdef IC_H
-#define SU__PRINT_VALUE(prefix, v)                             \
-    do {                                                       \
-        /* IC_STREAM may be stderr (it's the default) so we
-           need to flush stdout to get the output in order. */ \
-        fflush(stdout);                                        \
-        fputs(prefix, IC_STREAM);                              \
-        fputs(": ", IC_STREAM);                                \
-        ic__print_value(v);                                    \
-        fputs("\x1b[m\n", IC_STREAM);                          \
+
+#define su_assert_impl(_expr, _msg, _fatal)                                                    \
+    do {                                                                                       \
+        if (!(_expr)) {                                                                        \
+            fprintf(                                                                           \
+                stderr, "%s(%d): Assertion failed: %s\n", su_pretty_function(), __LINE__, _msg \
+            );                                                                                 \
+            su_self->status = SU_FAIL;                                                         \
+            if (_fatal) {                                                                      \
+                return;                                                                        \
+            }                                                                                  \
+        }                                                                                      \
     } while (0)
-#else
-#define SU__PRINT_VALUE(prefix, v)
-#endif
 
-#define su_assert(expr)                           \
-  {                                               \
-    su__typeof(expr) su__expr = (expr);           \
-    if (!su__expr) {                              \
-      SU__AF ("'" #expr "'");                     \
-      SU__PRINT_VALUE("    with expr", su__expr); \
-      su_fail();                                  \
-    }                                             \
-  }
+#define su_expect(_expr) su_assert_impl(_expr, #_expr, false)
+#define su_expect_eq(_a, _b) su_assert_impl((_a) == (_b), #_a " == " #_b, false)
+#define su_expect_ne(_a, _b) su_assert_impl((_a) != (_b), #_a " != " #_b, false)
+#define su_expect_streq(_a, _b) su_assert_impl(strcmp(_a, _b) == 0, #_a " == " #_b, false)
+#define su_expect_strne(_a, _b) su_assert_impl(strcmp(_a, _b) != 0, #_a " != " #_b, false)
+/// The two float values are almost equal (within 4 ULP's from each other)
+#define su_expect_float_eq(_a, _b) \
+    su_assert_impl(su_float_eq(su_float_float(_a), su_float_float(_b)), #_a " == " #_b, false)
+#define su_expect_double_eq(_a, _b) \
+    su_assert_impl(su_float_eq(su_float_double(_a), su_float_double(_b)), #_a " == " #_b, false)
+#define su_expect_near(_a, _b, _tolerance) \
+    su_assert_impl(fabs((_a) - (_b)) <= (_tolerance), #_a " == " #_b, false)
 
-#define su_assert_eq(a, b)                    \
-  {                                           \
-    su__typeof(a) su__a = (a);                \
-    su__typeof(b) su__b = (b);                \
-    if (!SU__EQ(su__a, su__b)) {              \
-      SU__AF ("'" #a " == " #b "'");          \
-      SU__PRINT_VALUE("    with lhs", su__a); \
-      SU__PRINT_VALUE("    with rhs", su__b); \
-      su_fail();                              \
-    }                                         \
-  }
+#define su_assert(_expr) su_assert_impl(_expr, #_expr, true)
+#define su_assert_eq(_a, _b) su_assert_impl((_a) == (_b), #_a " == " #_b, true)
+#define su_assert_ne(_a, _b) su_assert_impl((_a) != (_b), #_a " != " #_b, true)
+#define su_assert_streq(_a, _b) su_assert_impl(strcmp(_a, _b) == 0, #_a " == " #_b, true)
+#define su_assert_strne(_a, _b) su_assert_impl(strcmp(_a, _b) != 0, #_a " != " #_b, true)
+#define su_assert_float_eq(_a, _b) \
+    su_assert_impl(su_float_eq(su_float_float(_a), su_float_float(_b)), #_a " == " #_b, true)
+#define su_assert_double_eq(_a, _b) \
+    su_assert_impl(su_float_eq(su_float_double(_a), su_float_double(_b)), #_a " == " #_b, true)
+#define su_assert_near(_a, _b, _tolerance) \
+    su_assert_impl(fabs((_a) - (_b)) <= (_tolerance), #_a " == " #_b, true)
 
-#define su_assert_arrays_eq(a, b, size)                  \
-  {                                                      \
-    su__typeof (a) su__a = (a);                          \
-    su__typeof (b) su__b = (b);                          \
-    for (size_t su__i = 0; su__i < size; ++su__i)        \
-      {                                                  \
-        if (!SU__EQ(su__a[su__i], su__b[su__i])) {       \
-          SU__AFf ("Buffers '" #a "' and '" #b           \
-                   "' differ at index %zu", su__i);      \
-          SU__PRINT_VALUE("    with lhs", su__a[su__i]); \
-          SU__PRINT_VALUE("    with rhs", su__b[su__i]); \
-          su_fail();                                     \
-        }                                                \
-      }                                                  \
-  }
+#define su_expect_exit(_stmt, _pred, _output)                                                 \
+    do {                                                                                      \
+        if (su__state.options.skip_death_tests) {                                             \
+            su_skip();                                                                        \
+        } else {                                                                              \
+            su_subproc_info_t su_info = su_subproc_begin();                                   \
+            if (su_info.pid == 0) {                                                           \
+                _stmt;                                                                        \
+            }                                                                                 \
+            su_subproc_result_t su_result = su_subproc_end(su_info);                          \
+            if (su_check_subproc_result(&su_result, _pred, su_pretty_function(), __LINE__)) { \
+                su_self->status = SU_FAIL;                                                    \
+                return;                                                                       \
+            }                                                                                 \
+        }                                                                                     \
+    } while (0)
 
-#define su_bad_value(x, why)                   \
-    {                                          \
-        su__typeof(x) su__x = (x);             \
-        SU__HERE;                              \
-        puts("Bad value:");                    \
-        puts("  '" #x "' " why);               \
-        SU__PRINT_VALUE("    but was", su__x); \
-    }
+#define su_expect_death(_stmt, _output) su_expect_exit(_stmt, su_exited_abnormally(), _output)
 
+#endif  // SMALLUNIT_H
 
+#ifdef SU_IMPLEMENTATION
+#include <ctype.h>
+#include <float.h>
+
+#include <sys/resource.h>
+#include <sys/wait.h>
+#include <unistd.h>
+
+static const char *SU_STATUS_LABELS[] = {
+    "\x1b[32m:)\x1b[m",
+    "\x1b[31m:(\x1b[m",
+    "\x1b[33m:/\x1b[m",
+};
+
+su_state_t su__state;
+
+su_time_t
+su_time_from(struct timespec t) {
+    return (su_time_t){.value = t.tv_sec * 10000 + t.tv_nsec / 100000};
+}
+
+su_time_t
+su_time_add(su_time_t a, su_time_t b) {
+    return (su_time_t){.value = a.value + b.value};
+}
+
+su_time_t
+su_time_sub(su_time_t a, su_time_t b) {
+    return (su_time_t){.value = a.value - b.value};
+}
+
+double
+su_time_ms(su_time_t t) {
+    return (double)t.value / 10.0;
+}
 
 static void
-su__test_result (SUResult *result, int status, double time, const char *name,
-                 unsigned *passed, bool compact)
-{
-  result->milliseconds += time;
-  switch (status)
-    {
-    case SU_PASS:
-      {
-        ++result->passed;
-        ++*passed;
-        printf ("    \x1b[32m:) \x1b[90m%s\x1b[0m", name);
-        if (compact)
-          printf (" (%d)\r", *passed);
-        else
-          putchar ('\n');
-      } break;
-    case SU_FAIL:
-      {
-        ++result->failed;
-        if (*passed && compact)
-          putchar ('\n');
-        printf ("    \x1b[31m:( \x1b[90m%s\x1b[0m\n", name);
-        *passed = 0;
-      } break;
-    case SU_SKIP:
-      {
-        ++result->skipped;
-        if (*passed && compact)
-          putchar ('\n');
-        printf ("    \x1b[33m:/ \x1b[90m%s\x1b[0m\n", name);
-        *passed = 0;
-      } break;
+su_disable_core_dumps(void) {
+    struct rlimit rlim;
+    rlim.rlim_cur = 0;
+    rlim.rlim_max = 0;
+    if (setrlimit(RLIMIT_CORE, &rlim) == -1) {
+        perror("setrlimit");
     }
 }
 
-static inline void
-su_print_result (SUResult *result)
-{
-  putchar (' ');
-  if (result->passed > 0)
-    printf (" \x1b[32m%d passing", result->passed);
-  if (result->failed > 0)
-    printf (" \x1b[31m%d failing", result->failed);
-  if (result->skipped > 0)
-    printf (" \x1b[33m%d skipped", result->skipped);
-  if (result->milliseconds < 1000.0)
-    printf (" \x1b[90m(%dms)\x1b[0m\n\n", (int)(result->milliseconds + 0.5));
-  else
-    printf (" \x1b[90m(%ds)\x1b[0m\n\n", (int)(result->milliseconds / 1000.0 + 0.5));
+su_subproc_info_t
+su_subproc_begin(void) {
+    int p[2];
+    if (pipe(p) == -1) {
+        perror("pipe");
+        exit(1);
+    }
+    const int rx = p[0];
+    const int tx = p[1];
+    const int pid = fork();
+    switch (pid) {
+    case -1: perror("fork"); exit(1);
+
+    case 0:
+        su_disable_core_dumps();
+        dup2(tx, STDERR_FILENO);
+        close(rx);
+        break;
+
+    default: close(tx); break;
+    }
+    return (su_subproc_info_t){.pid = pid, .rx = rx, .tx = tx};
 }
 
-[[maybe_unused]] static inline SUResult
-su_new_result()
-{
-  return (SUResult) { 0, 0, 0, 0.0 };
+su_subproc_result_t
+su_subproc_end(su_subproc_info_t info) {
+    if (info.pid == 0) {
+        close(info.tx);
+        exit(EXIT_SUCCESS);
+    }
+    int status;
+    waitpid(info.pid, &status, 0);
+    char *const output = malloc(SU_STDERR_BUF_SIZE);
+    ssize_t n = read(info.rx, output, SU_STDERR_BUF_SIZE);
+    if (n == -1) {
+        perror("read");
+        exit(1);
+    }
+    close(info.rx);
+    output[n] = '\0';
+    while (n > 1 && isspace(output[n - 1])) {
+        output[--n] = '\0';
+    }
+    const char *trimmed = output;
+    while (isspace(*trimmed)) {
+        ++trimmed;
+    }
+    return (su_subproc_result_t){
+        .status = status,
+        ._stderr_buf = output,
+        .standard_error = trimmed,
+    };
 }
 
-[[maybe_unused]] static inline void
-su_add_result(SUResult *to, SUResult result)
-{
-  to->passed += result.passed;
-  to->failed += result.failed;
-  to->skipped += result.skipped;
-  to->milliseconds += result.milliseconds;
+su_subproc_predicate_t
+su_exited_with_code(int code) {
+    return (su_subproc_predicate_t){.code_or_signal = code, .is_signal = false};
 }
 
-#endif /* !SMALLUNIT_H */
+su_subproc_predicate_t
+su_killed_by_signal(int signal) {
+    return (su_subproc_predicate_t){.code_or_signal = signal, .is_signal = true};
+}
+
+su_subproc_predicate_t
+su_exited_abnormally(void) {
+    return (su_subproc_predicate_t){.any_abnormal = true};
+}
+
+bool
+su_subproc_predicate_matches_status(su_subproc_predicate_t predicate, int status) {
+    if (predicate.any_abnormal) {
+        return WIFEXITED(status) && WEXITSTATUS(status) != 0;
+    } else if (predicate.is_signal) {
+        return WIFSIGNALED(status) && WTERMSIG(status) == predicate.code_or_signal;
+    } else {
+        return WIFEXITED(status) && WEXITSTATUS(status) == predicate.code_or_signal;
+    }
+}
+
+static char *
+su_describe_status(int status) {
+    char *result;
+    if (WIFEXITED(status)) {
+        const int code = WEXITSTATUS(status);
+        if (code == 0) {
+            result = strdup("exited normally");
+        } else {
+            asprintf(&result, "code(%d)", code);
+        }
+    } else if (WIFSIGNALED(status)) {
+        const int signal = WTERMSIG(status);
+        asprintf(&result, "signal(%d)", signal);
+    } else {
+        result = strdup("unknown");
+    }
+    return result;
+}
+
+bool
+su_check_subproc_result(
+    const su_subproc_result_t *result,
+    su_subproc_predicate_t predicate,
+    const char *test_name,
+    int line
+) {
+    const bool status_matches = su_subproc_predicate_matches_status(predicate, result->status);
+    const bool output_matches
+        = !predicate.output || strcmp(predicate.output, result->standard_error) == 0;
+    if (status_matches && output_matches) {
+        return false;
+    }
+    printf("%s(%d): expected ", test_name, line);
+    if (!status_matches) {
+        if (predicate.any_abnormal) {
+            printf("abnormal exit, got %s\n", su_describe_status(result->status));
+        } else if (predicate.is_signal) {
+            printf(
+                "killed by signal %d, got %s\n",
+                predicate.code_or_signal,
+                su_describe_status(result->status)
+            );
+        } else {
+            printf(
+                "exited with code %d, got %s\n",
+                predicate.code_or_signal,
+                su_describe_status(result->status)
+            );
+        }
+    } else {
+        printf("output \"%s\", got \"%s\"\n", predicate.output, result->standard_error);
+    }
+    return true;
+}
+
+static void
+su_print_results(unsigned *counts, su_time_t runtime) {
+    const char *sep = "";
+    if (counts[SU_PASS]) {
+        printf("\x1b[32m%d passing\x1b[m", counts[SU_PASS]);
+        sep = " ";
+    }
+    if (counts[SU_FAIL]) {
+        printf("%s\x1b[31m%d failing\x1b[m", sep, counts[SU_FAIL]);
+        sep = " ";
+    }
+    if (counts[SU_SKIP]) {
+        printf("%s\x1b[33m%d skipped\x1b[m", sep, counts[SU_SKIP]);
+    }
+    const double ms = su_time_ms(runtime);
+    if (ms >= 1000.0) {
+        printf(" \x1b[2m(%.2fs)\x1b[m\n", ms / 1000.0);
+    } else {
+        printf(" \x1b[2m(%lums)\x1b[m\n", (unsigned long)(ms + 0.5));
+    }
+}
+
+void
+su_module_run_test(su_module_t *mod, su_test_t *test) {
+    struct timespec start, end;
+    test->status = SU_PASS;
+    clock_gettime(CLOCK_MONOTONIC, &start);
+    mod->vtable->run(mod, test);
+    clock_gettime(CLOCK_MONOTONIC, &end);
+    test->runtime = su_time_sub(su_time_from(end), su_time_from(start));
+}
+
+void
+su_module_run(su_module_t *mod) {
+    printf("  %s\n", mod->name);
+    memset(mod->counts, 0, sizeof(mod->counts));
+    mod->runtime = (su_time_t){0};
+    mod->vtable->init(mod);
+    for (int i = 0; i < arrlen(mod->tests); ++i) {
+        su_test_t *test = &mod->tests[i];
+        su_module_run_test(mod, test);
+        ++mod->counts[test->status];
+        mod->runtime = su_time_add(mod->runtime, test->runtime);
+        printf("    %s \x1b[2m%s\x1b[m\n", SU_STATUS_LABELS[test->status], test->name);
+    }
+    mod->vtable->clean(mod);
+    fputs("\n  ", stdout);
+    su_print_results(mod->counts, mod->runtime);
+    fputc('\n', stdout);
+}
+
+static void
+su_noop(void *_) {
+    (void)_;
+}
+
+static void
+su_run_stateless_test(void *_, su_test_t *test) {
+    (void)_;
+    ((su_stateless_test_fn_t)test->fn)(test);
+}
+
+static const su_module_vtable_t SU_MODULE_VTABLE = {
+    .init = su_noop,
+    .clean = su_noop,
+    .run = su_run_stateless_test,
+};
+
+static void
+su_fixture_owner_init(void *p_self) {
+    su_fixture_owner_t *self = p_self;
+    self->fixture = calloc(1, self->object_size);
+    self->setup(self->fixture);
+}
+
+static void
+su_fixture_owner_clean(void *p_self) {
+    su_fixture_owner_t *self = p_self;
+    self->tear_down(self->fixture);
+    free(self->fixture);
+}
+
+static void
+su_run_fixture_test(void *p_self, su_test_t *test) {
+    su_fixture_owner_t *self = p_self;
+    ((su_fixture_test_fn_t)test->fn)(test, self->fixture);
+}
+
+static const su_module_vtable_t SU_FIXTURE_OWNER_VTABLE = {
+    .init = su_fixture_owner_init,
+    .clean = su_fixture_owner_clean,
+    .run = su_run_fixture_test,
+};
+
+void
+su_options_default(su_options_t *options) {
+    options->skip_death_tests = SU_RUNNING_ON_VALGRIND;
+}
+
+su_module_t *
+su_state_get_module(su_state_t *state, const char *name) {
+    const ptrdiff_t index = shgeti(state->modules_by_name, name);
+    if (index < 0) {
+        su_module_t *mod = calloc(1, sizeof(*mod));
+        mod->name = name;
+        mod->vtable = &SU_MODULE_VTABLE;
+        // NOLINTNEXTLINE
+        arrput(state->modules, mod);
+        shput(state->modules_by_name, name, mod);
+        return mod;
+    } else {
+        return state->modules_by_name[index].value;
+    }
+}
+
+su_fixture_owner_t *
+su_state_get_fixture(su_state_t *state, const char *name) {
+    const ptrdiff_t index = shgeti(state->fixtures_by_name, name);
+    if (index < 0) {
+        su_fixture_owner_t *fixture = calloc(1, sizeof(*fixture));
+        fixture->mod.name = name;
+        fixture->mod.vtable = &SU_FIXTURE_OWNER_VTABLE;
+        // NOLINTNEXTLINE
+        arrput(state->modules, (su_module_t *)fixture);
+        shput(state->fixtures_by_name, name, fixture);
+        return fixture;
+    } else {
+        return state->fixtures_by_name[index].value;
+    }
+}
+
+void
+su_state_set_test_name(su_state_t *state, const char *function_name, const char *pretty_name) {
+    shput(state->test_names, function_name, pretty_name);
+}
+
+const char *
+su_state_test_name(su_state_t *state, const char *function_name) {
+    const ptrdiff_t index = shgeti(state->test_names, function_name);
+    if (index < 0) {
+        return function_name;
+    } else {
+        return state->test_names[index].value;
+    }
+}
+
+void
+su_state_drop(su_state_t *state) {
+    for (int i = 0; i < arrlen(state->modules); ++i) {
+        arrfree(state->modules[i]->tests);
+        free(state->modules[i]);
+    }
+    arrfree(state->modules);
+    shfree(state->modules_by_name);
+    shfree(state->fixtures_by_name);
+    shfree(state->test_names);
+}
+
+su_float_t
+su_float_float(float a) {
+    uint64_t bits = 0;
+    memcpy(&bits, &a, sizeof(a));
+    return (su_float_t){
+        .bits = bits,
+        .is_nan = isnanf(a),
+        .is_inf = isinff(a),
+        .sign = signbit(a),
+        .sign_bit_index = 31,
+    };
+}
+
+su_float_t
+su_float_double(double a) {
+    uint64_t bits = 0;
+    memcpy(&bits, &a, sizeof(bits));
+    return (su_float_t){
+        .bits = bits,
+        .is_nan = isnan(a),
+        .is_inf = isinf(a),
+        .sign = signbit(a),
+        .sign_bit_index = 63,
+    };
+}
+
+static uint64_t
+su_float_sign_magnitude_to_biased(su_float_t f) {
+    const uint64_t sign_mask = 1ull << f.sign_bit_index;
+    if (f.bits & sign_mask) {
+        return ~f.bits + 1;
+    } else {
+        return f.bits | sign_mask;
+    }
+}
+
+// https://gist.github.com/2b-t/02daa85ea5d83fc2cb96bfcf0570ab71
+bool
+su_float_eq(su_float_t a, su_float_t b) {
+    if (a.is_nan || b.is_nan) {
+        return false;
+    }
+    if (a.is_inf != b.is_inf || a.sign != b.sign) {
+        return false;
+    }
+    const uint64_t a_biased = su_float_sign_magnitude_to_biased(a);
+    const uint64_t b_biased = su_float_sign_magnitude_to_biased(b);
+    const uint64_t distance = a_biased > b_biased ? a_biased - b_biased : b_biased - a_biased;
+    return distance <= 4;
+}
+
+int
+su_run_all_tests() {
+    unsigned counts[3] = {0};
+    su_time_t total_time = {0};
+    if (!su__state.options_initialized) {
+        su_options_default(&su__state.options);
+        su__state.options_initialized = true;
+    }
+    for (int i = 0; i < arrlen(su__state.modules); ++i) {
+        su_module_t *mod = su__state.modules[i];
+        su_module_run(mod);
+        counts[SU_PASS] += mod->counts[SU_PASS];
+        counts[SU_FAIL] += mod->counts[SU_FAIL];
+        counts[SU_SKIP] += mod->counts[SU_SKIP];
+        total_time = su_time_add(total_time, mod->runtime);
+    }
+    fputs("Total:\n  ", stdout);
+    su_print_results(counts, total_time);
+    su_release_state();
+    return counts[SU_FAIL] ? 1 : 0;
+}
+
+void
+su_release_state() {
+    su_state_drop(&su__state);
+}
+
+#endif  // SU_IMPLEMENTATION
 
 // Copyright 2024 Jakob Mohrbacher
 //
