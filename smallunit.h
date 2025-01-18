@@ -1,7 +1,6 @@
 // https://github.com/JaMo42/smallunit
 #ifndef SMALLUNIT_H
 #define SMALLUNIT_H
-#include <float.h>
 #include <math.h>
 #include <stdbool.h>
 #include <stddef.h>
@@ -76,6 +75,8 @@ typedef enum {
     SU_SKIP,
 } su_status_t;
 
+typedef uint16_t su_count_t;
+
 typedef struct {
     // ms * 10 + one decimal place
     uint64_t value;
@@ -146,7 +147,7 @@ typedef struct {
     su_test_t *tests;
     const char *name;
     su_time_t runtime;
-    unsigned counts[3];
+    su_count_t counts[3];
 } su_module_t;
 
 void su_module_run_test(su_module_t *mod, su_test_t *test);
@@ -165,6 +166,11 @@ typedef struct {
 } su_options_t;
 
 void su_options_default(su_options_t *options);
+
+typedef struct {
+    su_count_t counts[3];
+    su_time_t runtime;
+} su_result_t;
 
 typedef struct {
     su_module_t **modules;
@@ -199,6 +205,8 @@ void su_state_set_test_name(su_state_t *state, const char *function_name, const 
 /// Get a pretty test function name.
 const char *
 su_state_test_name(su_state_t *state, const char *function_name, const char *pretty_name);
+/// Run all tests in the state.
+su_result_t su_state_run(su_state_t *state);
 /// Free all memory of the state.
 void su_state_drop(su_state_t *state);
 
@@ -221,7 +229,7 @@ int su_run_all_tests(void);
 
 void su_release_state(void);
 
-#define su_test_name(mod, test) su_test_##mod##_##test
+#define su_test_name(_mod, _test) su_test_##_mod##_##_test
 
 #define su_test(_mod, _test)                                                                     \
     void su_test_name(_mod, _test)(su_test_t *);                                                 \
@@ -319,9 +327,10 @@ void su_release_state(void);
 
 #endif  // SMALLUNIT_H
 
+// MARK: - Implementation
+
 #ifdef SU_IMPLEMENTATION
 #include <ctype.h>
-#include <float.h>
 
 #include <sys/resource.h>
 #include <sys/wait.h>
@@ -334,6 +343,8 @@ static const char *SU_STATUS_LABELS[] = {
 };
 
 su_state_t su__state;
+
+// MARK: - Time
 
 su_time_t
 su_time_from(struct timespec t) {
@@ -354,6 +365,8 @@ double
 su_time_ms(su_time_t t) {
     return (double)t.value / 10.0;
 }
+
+// MARK: - Subprocesses
 
 static void
 su_disable_core_dumps(void) {
@@ -500,8 +513,10 @@ su_check_subproc_result(
     return true;
 }
 
+// MARK: - Module
+
 static void
-su_print_results(unsigned *counts, su_time_t runtime) {
+su_print_results(su_count_t *counts, su_time_t runtime) {
     const char *sep = "";
     if (counts[SU_PASS]) {
         printf("\x1b[32m%d passing\x1b[m", counts[SU_PASS]);
@@ -594,6 +609,8 @@ static const su_module_vtable_t SU_FIXTURE_OWNER_VTABLE = {
     .run = su_run_fixture_test,
 };
 
+// MARK: - State
+
 void
 su_options_default(su_options_t *options) {
     options->skip_death_tests = SU_RUNNING_ON_VALGRIND;
@@ -646,6 +663,25 @@ su_state_test_name(su_state_t *state, const char *function_name, const char *pre
     }
 }
 
+su_result_t su_state_run(su_state_t *state) {
+    su_result_t result = {0};
+    if (!state->options_initialized) {
+        su_options_default(&state->options);
+        state->options_initialized = true;
+    }
+    for (int i = 0; i < arrlen(state->modules); ++i) {
+        su_module_t *mod = state->modules[i];
+        su_module_run(mod);
+        result.counts[SU_PASS] += mod->counts[SU_PASS];
+        result.counts[SU_FAIL] += mod->counts[SU_FAIL];
+        result.counts[SU_SKIP] += mod->counts[SU_SKIP];
+        result.runtime = su_time_add(result.runtime, mod->runtime);
+    }
+    fputs("Total:\n  ", stdout);
+    su_print_results(result.counts, result.runtime);
+    return result;
+}
+
 void
 su_state_drop(su_state_t *state) {
     for (int i = 0; i < arrlen(state->modules); ++i) {
@@ -658,14 +694,16 @@ su_state_drop(su_state_t *state) {
     shfree(state->test_names);
 }
 
+// MARK: - Float
+
 su_float_t
 su_float_float(float a) {
     uint64_t bits = 0;
     memcpy(&bits, &a, sizeof(a));
     return (su_float_t){
         .bits = bits,
-        .is_nan = isnanf(a),
-        .is_inf = isinff(a),
+        .is_nan = isnan(a),
+        .is_inf = isinf(a),
         .sign = signbit(a),
         .sign_bit_index = 31,
     };
@@ -709,26 +747,23 @@ su_float_eq(su_float_t a, su_float_t b) {
     return distance <= 4;
 }
 
+// MARK: - Global
+
+bool su_streq(const char *a, const char *b) {
+    if (a == b) {
+        return true;
+    } else if (!a || !b) {
+        return false;
+    } else {
+        return strcmp(a, b) == 0;
+    }
+}
+
 int
 su_run_all_tests() {
-    unsigned counts[3] = {0};
-    su_time_t total_time = {0};
-    if (!su__state.options_initialized) {
-        su_options_default(&su__state.options);
-        su__state.options_initialized = true;
-    }
-    for (int i = 0; i < arrlen(su__state.modules); ++i) {
-        su_module_t *mod = su__state.modules[i];
-        su_module_run(mod);
-        counts[SU_PASS] += mod->counts[SU_PASS];
-        counts[SU_FAIL] += mod->counts[SU_FAIL];
-        counts[SU_SKIP] += mod->counts[SU_SKIP];
-        total_time = su_time_add(total_time, mod->runtime);
-    }
-    fputs("Total:\n  ", stdout);
-    su_print_results(counts, total_time);
+    su_result_t result = su_state_run(&su__state);
     su_release_state();
-    return counts[SU_FAIL] ? 1 : 0;
+    return result.counts[SU_FAIL] ? 1 : 0;
 }
 
 void
@@ -738,7 +773,7 @@ su_release_state() {
 
 #endif  // SU_IMPLEMENTATION
 
-// Copyright 2024 Jakob Mohrbacher
+// Copyright 2024, 2025 Jakob Mohrbacher
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are met:

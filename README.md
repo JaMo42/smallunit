@@ -6,7 +6,7 @@ v2: https://raw.githubusercontent.com/JaMo42/smallunit/b70cd334e36bf320b38db8037
 
 ## Requirements
 
-- `std_ds.h` (https://nothings.org/stb_ds/, https://github.com/nothings/stb/blob/master/stb_ds.h)
+- `std_ds.h` (https://github.com/nothings/stb/blob/master/stb_ds.h)
 
 - C only, Linux, and GNU extensions
 
