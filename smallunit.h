@@ -197,7 +197,8 @@ su_fixture_owner_t *su_state_get_fixture(su_state_t *state, const char *name);
 /// Set a pretty test function name.
 void su_state_set_test_name(su_state_t *state, const char *function_name, const char *pretty_name);
 /// Get a pretty test function name.
-const char *su_state_test_name(su_state_t *state, const char *function_name);
+const char *
+su_state_test_name(su_state_t *state, const char *function_name, const char *pretty_name);
 /// Free all memory of the state.
 void su_state_drop(su_state_t *state);
 
@@ -249,7 +250,7 @@ void su_release_state(void);
     }                                                                                     \
     void su_test_name(_fixture, _test)(su_test_t * su_self, _fixture * SU_FIXTURE_IDENTIFIER)
 
-#define su_pretty_function() su_state_test_name(&su__state, __PRETTY_FUNCTION__)
+#define su_pretty_function() su_state_test_name(&su__state, __func__, __PRETTY_FUNCTION__)
 
 #define su_skip()                         \
     do {                                  \
@@ -636,10 +637,10 @@ su_state_set_test_name(su_state_t *state, const char *function_name, const char 
 }
 
 const char *
-su_state_test_name(su_state_t *state, const char *function_name) {
+su_state_test_name(su_state_t *state, const char *function_name, const char *pretty_name) {
     const ptrdiff_t index = shgeti(state->test_names, function_name);
     if (index < 0) {
-        return function_name;
+        return pretty_name;
     } else {
         return state->test_names[index].value;
     }
