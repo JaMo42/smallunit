@@ -224,6 +224,8 @@ su_float_t su_float_float(float a);
 su_float_t su_float_double(double a);
 bool su_float_eq(su_float_t a, su_float_t b);
 
+bool su_streq(const char *a, const char *b);
+
 /// Returns 0 if no tests failed.
 int su_run_all_tests(void);
 
@@ -284,8 +286,8 @@ void su_release_state(void);
 #define su_expect(_expr) su_assert_impl(_expr, #_expr, false)
 #define su_expect_eq(_a, _b) su_assert_impl((_a) == (_b), #_a " == " #_b, false)
 #define su_expect_ne(_a, _b) su_assert_impl((_a) != (_b), #_a " != " #_b, false)
-#define su_expect_streq(_a, _b) su_assert_impl(strcmp(_a, _b) == 0, #_a " == " #_b, false)
-#define su_expect_strne(_a, _b) su_assert_impl(strcmp(_a, _b) != 0, #_a " != " #_b, false)
+#define su_expect_streq(_a, _b) su_assert_impl(su_streq(_a, _b), #_a " == " #_b, false)
+#define su_expect_strne(_a, _b) su_assert_impl(!su_streq(_a, _b), #_a " != " #_b, false)
 /// The two float values are almost equal (within 4 ULP's from each other)
 #define su_expect_float_eq(_a, _b) \
     su_assert_impl(su_float_eq(su_float_float(_a), su_float_float(_b)), #_a " == " #_b, false)
@@ -297,8 +299,8 @@ void su_release_state(void);
 #define su_assert(_expr) su_assert_impl(_expr, #_expr, true)
 #define su_assert_eq(_a, _b) su_assert_impl((_a) == (_b), #_a " == " #_b, true)
 #define su_assert_ne(_a, _b) su_assert_impl((_a) != (_b), #_a " != " #_b, true)
-#define su_assert_streq(_a, _b) su_assert_impl(strcmp(_a, _b) == 0, #_a " == " #_b, true)
-#define su_assert_strne(_a, _b) su_assert_impl(strcmp(_a, _b) != 0, #_a " != " #_b, true)
+#define su_assert_streq(_a, _b) su_assert_impl(su_streq(_a, _b), #_a " == " #_b, true)
+#define su_assert_strne(_a, _b) su_assert_impl(!su_streq(_a, _b), #_a " != " #_b, true)
 #define su_assert_float_eq(_a, _b) \
     su_assert_impl(su_float_eq(su_float_float(_a), su_float_float(_b)), #_a " == " #_b, true)
 #define su_assert_double_eq(_a, _b) \

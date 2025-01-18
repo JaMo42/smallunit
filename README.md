@@ -100,6 +100,8 @@ Fatal Assertion | Nonfatal Assertion | Verifies
 su_assert_streq(*a*, *b*) | su_expect_streq(*a*, *b*) | the two C strings have the same content
 su_assert_strne(*a*, *b*) | su_expect_strne(*a*, *b*) | the two C strings have different content
 
+Passing `NULL` to these is valid.
+
 ### Floats
 
 Fatal Assertion | Nonfatal Assertion | Verifies
