@@ -27,6 +27,12 @@
 #define SU_RUNNING_ON_VALGRIND false
 #endif
 
+#ifdef __clang__
+#  define su_typeof(x) __typeof__(x)
+#else
+#  define su_typeof(x) typeof(x)
+#endif
+
 #ifndef SU_NO_SHORT_NAMES
 #define TEST su_test
 #define TEST_F su_test_f
@@ -62,11 +68,10 @@
 #define su_cat3_inner(x, y, z) x##y##z
 #define su_cat3(x, y, z) su_cat3_inner(x, y, z)
 
-#define su_arrpush(arr)                              \
-    ({                                               \
-        typeof(arr) _ptr = stbds_arraddnptr(arr, 1); \
-        memset(_ptr, 0, sizeof(*_ptr));              \
-        _ptr;                                        \
+#define su_arrpush(arr)                                 \
+    ({                                                  \
+        su_typeof(arr) _ptr = stbds_arraddnptr(arr, 1); \
+        memset(_ptr, 0, sizeof(*_ptr));                 \
     })
 
 typedef enum {
