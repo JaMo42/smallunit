@@ -2,7 +2,7 @@
 
 A small unit testing framework for C.
 
-v2: https://raw.githubusercontent.com/JaMo42/smallunit/b70cd334e36bf320b38db8037773fcfa02bf9aa9/smallunit.h
+v2 (legacy): https://raw.githubusercontent.com/JaMo42/smallunit/b70cd334e36bf320b38db8037773fcfa02bf9aa9/smallunit.h
 
 ## Requirements
 
