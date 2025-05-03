@@ -70,6 +70,23 @@ All modules, fixtures, and tests are added automatically, `su_run_all_tests` run
 
 Modules (both stateless and fixtures), and the tests inside them are run in declaration order.
 
+#### Running less
+
+```c
+su_run_one_module("module_name");
+```
+Runs just one module.
+
+```c
+su_run_one_test("module_name.test_name");
+su_run_one_test("test_name");
+```
+Runs only a single test, the latter searches accross all modules and uses the first match, based on the order they were registered.
+
+---
+
+There is currently no builtin mechanism of choosing between `su_run_all_tests`, `su_run_one_module`, and `su_run_one_test`.
+
 ### Short names
 
 If `SU_NO_SHORT_NAMES` is not defined, the `su_name` macros will have `NAME` defined as an alias (`su_test_f` => `TEST_F`, `su_expect_eq` => `EXPECT_EQ`, etc.), generally matching macro names from GoogleTest.

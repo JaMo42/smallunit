@@ -203,6 +203,14 @@ su_test(death_tests, death_error) {
 }
 
 int
-main() {
-    return su_run_all_tests();
+main(int argc, const char **argv) {
+    if (argv[1]) {
+        if (strncmp(argv[1], "m:", 2) == 0) {
+            return su_run_one_module(argv[1] + 2);
+        } else {
+            return su_run_one_test(argv[1]);
+        }
+    } else {
+        return su_run_all_tests();
+    }
 }

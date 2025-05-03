@@ -234,6 +234,14 @@ bool su_streq(const char *a, const char *b);
 /// Returns 0 if no tests failed.
 int su_run_all_tests(void);
 
+/// Returns 0 if no tests failed.
+int su_run_one_module(const char *name);
+
+/// Returns 0 is the test failed.
+/// `ident` is `module.test`, or just `test` in which case the first match in
+/// the order of registration is used.
+int su_run_one_test(const char *ident);
+
 void su_release_state(void);
 
 #define su_test_name(_mod, _test) su_test_##_mod##_##_test
@@ -520,10 +528,20 @@ su_check_subproc_result(
     return true;
 }
 
-// MARK: - Module
+// MARK: - Messages
 
 static void
-su_print_results(su_count_t *counts, su_time_t runtime) {
+su_announce_module(const char *name) {
+    printf("  %s\n", name);
+}
+
+static void
+su_print_test_result(const su_test_t *test) {
+    printf("    %s \x1b[2m%s\x1b[m\n", SU_STATUS_LABELS[test->status], test->name);
+}
+
+static void
+su_print_results(const su_count_t *counts, su_time_t runtime) {
     const char *sep = "";
     if (counts[SU_PASS]) {
         printf("\x1b[32m%d passing\x1b[m", counts[SU_PASS]);
@@ -544,6 +562,15 @@ su_print_results(su_count_t *counts, su_time_t runtime) {
     }
 }
 
+static void
+su_print_module_result(const su_module_t *mod) {
+    fputs("\n  ", stdout);
+    su_print_results(mod->counts, mod->runtime);
+    fputc('\n', stdout);
+}
+
+// MARK: - Module
+
 void
 su_module_run_test(su_module_t *mod, su_test_t *test) {
     struct timespec start, end;
@@ -556,7 +583,7 @@ su_module_run_test(su_module_t *mod, su_test_t *test) {
 
 void
 su_module_run(su_module_t *mod) {
-    printf("  %s\n", mod->name);
+    su_announce_module(mod->name);
     memset(mod->counts, 0, sizeof(mod->counts));
     mod->runtime = (su_time_t){0};
     mod->vtable->init(mod);
@@ -565,12 +592,10 @@ su_module_run(su_module_t *mod) {
         su_module_run_test(mod, test);
         ++mod->counts[test->status];
         mod->runtime = su_time_add(mod->runtime, test->runtime);
-        printf("    %s \x1b[2m%s\x1b[m\n", SU_STATUS_LABELS[test->status], test->name);
+        su_print_test_result(test);
     }
     mod->vtable->clean(mod);
-    fputs("\n  ", stdout);
-    su_print_results(mod->counts, mod->runtime);
-    fputc('\n', stdout);
+    su_print_module_result(mod);
 }
 
 static void
@@ -773,11 +798,93 @@ su_run_all_tests() {
     return result.counts[SU_FAIL] ? 1 : 0;
 }
 
+int
+su_run_one_module(const char *name) {
+    su_state_t *state = &su__state;
+    if (!state->options_initialized) {
+        su_options_default(&state->options);
+        state->options_initialized = true;
+    }
+    su_module_t *mod = NULL;
+    for (int i = 0; i < arrlen(state->modules); ++i) {
+        if (strcmp(state->modules[i]->name, name) == 0) {
+            mod = state->modules[i];
+            break;
+        }
+    }
+    if (!mod) {
+        fprintf(stderr, "module not found: %s\n", name);
+        return 1;
+    }
+    su_module_run(mod);
+    int result = mod->counts[SU_FAIL];
+    su_release_state();
+    return result;
+}
+
+int
+su_run_one_test(const char *ident) {
+    su_state_t *state = &su__state;
+    if (!state->options_initialized) {
+        su_options_default(&state->options);
+        state->options_initialized = true;
+    }
+    const char *sep = strchr(ident, '.');
+    size_t modnamelen = sep ? sep - ident : 0;
+    const char *testname = sep ? sep + 1 : ident;
+    size_t testnamelen = strlen(testname);
+    su_module_t *mod = NULL;
+    su_test_t *test = NULL;
+    for (int i = 0; i < arrlen(state->modules); ++i) {
+        mod = state->modules[i];
+        if (sep && strncmp(mod->name, ident, modnamelen) != 0) {
+            continue;
+        }
+        for (int j = 0; j < arrlen(mod->tests); ++j) {
+            test = &mod->tests[j];
+            if (strncmp(test->name, testname, testnamelen) == 0) {
+                goto found;
+            }
+            test = NULL;
+        }
+        mod = NULL;
+    }
+    if (sep && !mod) {
+        fprintf(stderr, "module not found: %.*s\n", (int)modnamelen, ident);
+        return  1;
+    }
+    if (!test) {
+        if (mod) {
+            fprintf(
+                stderr,
+                "test not found in module %.*s: %s\n",
+                (int)modnamelen,
+                ident,
+                testname
+            );
+        } else {
+            fprintf(stderr, "test not found: %s\n", testname);
+        }
+        return 1;
+    }
+found:
+    su_announce_module(mod->name);
+    mod->vtable->init(mod);
+    su_module_run_test(mod, test);
+    mod->vtable->clean(mod);
+
+    ++mod->counts[test->status];
+    mod->runtime = test->runtime;
+
+    su_print_test_result(test);
+    su_print_module_result(mod);
+    return test->status == SU_FAIL;
+}
+
 void
 su_release_state() {
     su_state_drop(&su__state);
 }
-
 #endif  // SU_IMPLEMENTATION
 
 // Copyright 2024, 2025 Jakob Mohrbacher
