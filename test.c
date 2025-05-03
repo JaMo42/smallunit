@@ -192,6 +192,11 @@ my_error(void) {
 }
 
 su_test(death_tests, nullpointer_write_crashes) {
+    // TODO: address sanitizer turns this into SIGTRAP, and we also don't get
+    // its output since we consume stderr.  And on top of that we use only a
+    // limited number of bytes for the stderr output so we won't even get all
+    // of the address sanitizer output in some situations.  Otherwise we could
+    // maybe just print if if we get SIGTRAP.
     su_expect_exit(*(volatile char *)0 = 'A', su_killed_by_signal(SIGSEGV), NULL);
     char *valid = malloc(1);
     su_expect_exit(*valid = 'A', su_killed_by_signal(SIGSEGV), NULL);

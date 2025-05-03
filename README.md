@@ -8,7 +8,7 @@ v2 (legacy): https://raw.githubusercontent.com/JaMo42/smallunit/b70cd334e36bf320
 
 - `std_ds.h` (https://github.com/nothings/stb/blob/master/stb_ds.h)
 
-- C only, Linux, and GNU extensions
+- C only, GNU extensions, tested on Linux and MacOS
 
 ## Usage
 
@@ -57,6 +57,7 @@ su_test_f(thing_test, test_name) {
 - Prior to calling `setup` the value is zeroed.
 
 - The identifier for the fixture object inside the test cases can be changed by defining `SU_FIXTURE_IDENTIFIER`, and defaults to `self`.
+    This only affects the parameter name in the function definition, so it can be re-defined or have different names in different files without problem.
 
 ### Running
 
@@ -90,6 +91,12 @@ There is currently no builtin mechanism of choosing between `su_run_all_tests`, 
 ### Short names
 
 If `SU_NO_SHORT_NAMES` is not defined, the `su_name` macros will have `NAME` defined as an alias (`su_test_f` => `TEST_F`, `su_expect_eq` => `EXPECT_EQ`, etc.), generally matching macro names from GoogleTest.
+
+### Debugging
+
+On Linux and macOS, if a debugger is attached, failed assertions will raise a SIGTRAP.
+This isn't the _most_ useful since you'd probably care about debugging inside the expression that caused the assertion failure,
+but often it can still provide some extra context about where to start looking using the available variables inside the test function.
 
 ## Assertions
 

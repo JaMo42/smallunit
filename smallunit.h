@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
+#include <signal.h>
 
 #include "stb_ds.h"
 
@@ -73,6 +74,10 @@
         su_typeof(arr) _ptr = stbds_arraddnptr(arr, 1); \
         memset(_ptr, 0, sizeof(*_ptr));                 \
     })
+
+/// Returns true if the program is being debugged.
+/// May return a false negative if the platform is not supported.
+bool su_is_being_debugged(void);
 
 typedef enum {
     SU_PASS,
@@ -290,6 +295,9 @@ void su_release_state(void);
                 stderr, "%s(%d): Assertion failed: %s\n", su_pretty_function(), __LINE__, _msg \
             );                                                                                 \
             su_self->status = SU_FAIL;                                                         \
+            if (su_is_being_debugged()) {                                                      \
+                raise(SIGTRAP);                                                                \
+            }                                                                                  \
             if (_fatal) {                                                                      \
                 return;                                                                        \
             }                                                                                  \
@@ -351,6 +359,14 @@ void su_release_state(void);
 #include <sys/wait.h>
 #include <unistd.h>
 
+#ifdef __linux__
+#include <sys/ptrace.h>
+#elif defined(__APPLE__)
+#include <sys/sysctl.h>
+#include <sys/types.h>
+#include <sys/user.h>
+#endif
+
 static const char *SU_STATUS_LABELS[] = {
     "\x1b[32m:)\x1b[m",
     "\x1b[31m:(\x1b[m",
@@ -358,6 +374,28 @@ static const char *SU_STATUS_LABELS[] = {
 };
 
 su_state_t su__state;
+
+// MARK: - Debugger detection
+
+bool
+su_is_being_debugged(void) {
+#ifdef __linux__
+    return ptrace(PTRACE_TRACEME, 0, NULL, 0) == -1;
+#elif defined(__APPLE__)
+    int mib[4];
+    struct kinfo_proc info;
+    size_t size = sizeof(info);
+    info.kp_proc.p_flag = 0;
+    mib[0] = CTL_KERN;
+    mib[1] = KERN_PROC;
+    mib[2] = KERN_PROC_PID;
+    mib[3] = getpid();
+    sysctl(mib, 4, &info, &size, NULL, 0);
+    return (info.kp_proc.p_flag & P_TRACED) != 0;
+#else
+    return false;
+#endif
+}
 
 // MARK: - Time
 
@@ -485,7 +523,7 @@ su_describe_status(int status) {
         }
     } else if (WIFSIGNALED(status)) {
         const int signal = WTERMSIG(status);
-        asprintf(&result, "signal(%d)", signal);
+        asprintf(&result, "signal(%s)", strsignal(signal));
     } else {
         result = strdup("unknown");
     }
